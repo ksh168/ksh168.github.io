@@ -15,7 +15,8 @@
         "JavaScript",
         "NodeJS",
         "React",
-        "Python"
+        "Python",
+        "Go"
       ],
       "databases_caches": [
         "PostgreSQL",
@@ -37,9 +38,14 @@
         "AWS",
         "Azure"
       ],
-      "containers": [
+      "tools":[
         "Docker",
-        "Kubernetes"
+        "Kubernetes",
+        "Git",
+        "Grafana",
+        "Prometheus",
+        "Jenkins",
+        "Helm"
       ],
       "skillNameMapping": {
         "languages_frameworks": "Languages & Frameworks",
@@ -48,7 +54,7 @@
         "dataEngineering": "Data Engineering",
         "logging": "Logging",
         "cloudPlatforms": "Cloud Platforms",
-        "containers": "Containers"
+        "tools": "Dev Tools"
       }
     },
     "hobbies": [

@@ -26,7 +26,12 @@
 
 .project-card .list-item-details {
     flex-grow: 1;
-    overflow: hidden;
+    overflow: visible;
+}
+
+.list-item-detail {
+    color: #333; /* Ensure text color is visible */
+    white-space: normal; /* Prevent text from being clipped */
 }
 
 .project-links {
