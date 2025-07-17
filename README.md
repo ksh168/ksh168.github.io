@@ -1,6 +1,6 @@
 # Portfolio Website
 
-This is a personal portfolio website built using React.
+This is a personal portfolio website built using React and NodeJS 20.19.4.
 
 ## Features
 
