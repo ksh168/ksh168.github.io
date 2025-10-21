@@ -38,7 +38,7 @@
         "AWS",
         "Azure"
       ],
-      "tools":[
+      "tools": [
         "Docker",
         "Kubernetes",
         "Git",
