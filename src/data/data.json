@@ -103,10 +103,10 @@
       "publisher": "IEEE, 2020 Third International Conference on Smart Systems and Inventive Technology (ICSSIT)",
       "publisherUrl": "https://scholar.google.com/citations?view_op=view_citation&user=iGdBvvwAAAAJ&citation_for_view=iGdBvvwAAAAJ:u5HHmVD_uO8C",
       "publishedDate": "Oct. 2020",
-      "citations": 16,
+      "citations": 18,
       "doi": "https://doi.org/10.1109/ICSSIT48917.2020.9214122",
       "abstract": "Cryptocurrencies could potentially revolutionize the way our global economy functions. It presents us with enticing features that could give way to a secure and safe monetary transaction environment. Nonetheless, the present system provides a large room for improvement, and some could consider it merely a platform yet to be built upon. HCH DEX or Hot-Cold Hybrid Decentralized Exchange presents a method to locally store Cryptocurrency Wallet data in personal devices and process transactions between two personal devices without needing any common database or centralized server system to act as a broker or service provider; any licensed Local Broker can be used to facilitate a transaction in the Blockchain and register it in the distributed ledger. Additionally, the setup has been proposed that could be realized in the form of a smart card and could be designed to not be much thicker than the cards that are ubiquitous today. It is based on the conjunction of a secure two-way authentication system that enables robust handshaking mechanisms for e-Wallets and Lightweight DLT Nodes as local facilitators. It could arguably be a small step towards a fair and just economic system that is resistant to fraudulent and unethical policies and practices at different levels.",
-      "lastUpdated": "2025-11-09T01:12:53.976Z"
+      "lastUpdated": "2025-12-14T01:19:09.023Z"
     },
     {
       "title": "Smart Boarding System with ePassports for Secure and Independent Interoperability",
@@ -116,7 +116,7 @@
       "citations": 7,
       "doi": "https://doi.org/10.1007/s42979-021-00938-5",
       "abstract": "Boarding, checking-in, immigration, etc. in air travel environments are time-sensitive and resource-sensitive processes. For a smooth and seamless experience, it is paramount for us to innovate and streamline the whole experience from start to end without compromising on security and safety. Various physical documents such as passports, printed tickets, physical rubber stamps, human-driven verification counters, etc. are resource-intensive processes in the sense that they consume additional human resources, and they largely slow down the passenger flow rates through the various gates and counters. In this work, we have proposed an electronic boarding system for e-Passports which may be a significant stride towards improving the existing setups. Presently used “smart systems” utilize Bar-code, QR Code or RFID chips as unique identifiers for the user details in a given database local to the software environment; this means the traditional smart system can be used for as long as the database is accessible, and beyond that, the same traditional smart system may not be useful. The proposed system possesses the ability to independently and bi-directionally communicate with the local “digital officers” that may be present at different gates or counters within completely disconnected environments using electronically activated passports with locally stored digital signatures and/or stamps. This allows different airports to utilize a common secure protocol, and have smarter, faster gates without the need of having shared databases. The system has been designed with interoperability and flexibility of architecture in scope so as to be easily adopted by any airport and to scale as needed.",
-      "lastUpdated": "2025-11-09T01:13:04.086Z"
+      "lastUpdated": "2025-12-14T01:19:19.211Z"
     }
   ],
   "experience": [
