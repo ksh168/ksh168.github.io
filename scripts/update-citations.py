@@ -3,22 +3,19 @@ update-citations.py
 
 Fetches citation counts from Google Scholar using the `scholarly` library
 and updates src/data/data.json.
+
+Includes a strict multiprocessing timeout to prevent hangs when executed
+in environments where Google Scholar blocks datacenter IPs (like GitHub Actions).
 """
 
 import json
+import multiprocessing
 import re
 import sys
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-try:
-    from scholarly import scholarly
-except Exception as e:
-    print(f"ERROR: Could not import 'scholarly': {e}")
-    traceback.print_exc()
-    sys.exit(1)
-
+SCHOLAR_TIMEOUT_SECONDS = 25
 DATA_PATH = Path(__file__).resolve().parent.parent / "src" / "data" / "data.json"
 
 
@@ -33,13 +30,14 @@ def extract_author_and_citation_ids(publisher_url: str) -> tuple[str | None, str
     return user_id, cite_id
 
 
-def fetch_author_publications(author_id: str) -> dict[str, int]:
+def _fetch_scholar_worker(author_id: str, return_dict):
     """
-    Fetches the author's publications map: citation_id -> num_citations.
+    Worker function executed in a separate process to enforce a strict timeout.
     """
-    pub_map = {}
     try:
-        print(f"Fetching Google Scholar author profile for ID: {author_id}...")
+        from scholarly import scholarly
+
+        print(f"Connecting to Google Scholar for author ID: {author_id}...")
         author = scholarly.search_author_id(author_id)
         author = scholarly.fill(author, sections=["publications"])
         for p in author.get("publications", []):
@@ -47,12 +45,39 @@ def fetch_author_publications(author_id: str) -> dict[str, int]:
             num_citations = p.get("num_citations", 0)
             title = p.get("bib", {}).get("title", "Unknown")
             if pub_id:
-                pub_map[pub_id] = num_citations
-            print(f"  Scholar entry: {pub_id} | {title} | {num_citations} citations")
+                return_dict[pub_id] = num_citations
+            print(f"  Scholar found: {pub_id} | {title} | {num_citations} citations")
     except Exception as e:
-        print(f"  Error fetching author profile: {e}")
-        traceback.print_exc()
-    return pub_map
+        print(f"  Error in scholarly worker: {e}")
+
+
+def fetch_scholar_publications_with_timeout(author_id: str) -> dict[str, int]:
+    """
+    Spawns a child process with a hard timeout to fetch Scholar citations.
+    Terminates cleanly if Google Scholar blocks or throttles the connection.
+    """
+    manager = multiprocessing.Manager()
+    return_dict = manager.dict()
+
+    p = multiprocessing.Process(
+        target=_fetch_scholar_worker, args=(author_id, return_dict)
+    )
+    p.start()
+    p.join(timeout=SCHOLAR_TIMEOUT_SECONDS)
+
+    if p.is_alive():
+        print(
+            f"  ⚠️ Google Scholar timed out after {SCHOLAR_TIMEOUT_SECONDS}s "
+            "(likely blocked by Google bot detection/CAPTCHA on datacenter IP)."
+        )
+        p.terminate()
+        p.join(timeout=2)
+        if p.is_alive():
+            p.kill()
+        print("  Worker process safely terminated.")
+        return {}
+
+    return dict(return_dict)
 
 
 def main():
@@ -67,7 +92,7 @@ def main():
         print("No publications found in data.json.")
         return
 
-    # Collect author IDs
+    # Collect author IDs from URLs
     author_ids = set()
     for pub in publications:
         url = pub.get("publisherUrl", "")
@@ -77,7 +102,7 @@ def main():
 
     all_pubs_map = {}
     for uid in author_ids:
-        pubs = fetch_author_publications(uid)
+        pubs = fetch_scholar_publications_with_timeout(uid)
         all_pubs_map.update(pubs)
 
     updated = 0
@@ -98,10 +123,16 @@ def main():
             print(f"  ✅ Updated to {count} citations.")
             updated += 1
         else:
-            print(f"  ⚠️  Could not find matching citation count — keeping existing value ({pub.get('citations', 'none')}).")
+            print(
+                f"  ℹ️ Keeping current citation value: {pub.get('citations', 'none')}"
+            )
 
-    DATA_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"\n✅ Done! Updated {updated}/{len(publications)} publications in data.json.")
+    DATA_PATH.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(
+        f"\n✅ Completed citation update check ({updated}/{len(publications)} refreshed)."
+    )
 
 
 if __name__ == "__main__":

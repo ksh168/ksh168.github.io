@@ -23,6 +23,7 @@
     "deploy": "gh-pages -b gh-pages -d build",
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "update-citations": "python3 scripts/update-citations.py",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
