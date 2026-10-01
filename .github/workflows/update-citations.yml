@@ -16,6 +16,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       with:
+        ref: master
         token: ${{ secrets.GITHUB_TOKEN }}
 
     # ── Python: fetch Google Scholar citation counts ──────────────────────────
@@ -39,8 +40,7 @@ jobs:
     - name: Commit citation updates
       run: |
         git add src/data/data.json
-        git diff --quiet && git diff --staged --quiet || \
-          (git commit -m "Update citation counts [skip ci]" && git push)
+        git diff --staged --quiet || (git commit -m "Update citation counts [skip ci]" && git push origin master)
 
     # ── Node: build & deploy React app ───────────────────────────────────────
     - name: Set up Node.js
