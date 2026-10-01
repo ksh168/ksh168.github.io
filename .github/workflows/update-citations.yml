@@ -5,12 +5,16 @@ on:
     - cron: '0 0 * * 0'  # Runs every Sunday at midnight
   workflow_dispatch:      # Allows manual trigger
 
+permissions:
+  contents: write
+
 jobs:
   update-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -20,8 +24,8 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Install scholarly
-      run: pip install scholarly
+    - name: Install dependencies
+      run: pip install "scholarly" "bibtexparser<2.0.0"
 
     - name: Update citations
       run: python scripts/update-citations.py
@@ -40,7 +44,7 @@ jobs:
 
     # ── Node: build & deploy React app ───────────────────────────────────────
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v3
       with:
         node-version: '20'
         cache: 'npm'
@@ -49,11 +53,13 @@ jobs:
       run: npm ci
 
     - name: Build
+      env:
+        REACT_APP_GOOGLE_ANALYTICS_ID: ${{ secrets.GOOGLE_ANALYTICS_ID }}
       run: CI=false npm run build
 
     - name: Deploy to GitHub Pages
-      run: |
-        git remote set-url origin https://git:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
-        npm run deploy -- -u "github-actions-bot <support+actions@github.com>"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: build
+        branch: gh-pages
+        token: ${{ secrets.GITHUB_TOKEN }}

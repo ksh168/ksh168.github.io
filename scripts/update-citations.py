@@ -3,66 +3,63 @@ update-citations.py
 
 Fetches citation counts from Google Scholar using the `scholarly` library
 and updates src/data/data.json.
-
-scholarly docs: https://scholarly.readthedocs.io/en/stable/
 """
 
 import json
 import re
-import time
 import sys
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from scholarly import scholarly, ProxyGenerator
-except ImportError:
-    print("ERROR: 'scholarly' is not installed. Run: pip install scholarly")
+    from scholarly import scholarly
+except Exception as e:
+    print(f"ERROR: Could not import 'scholarly': {e}")
+    traceback.print_exc()
     sys.exit(1)
 
-
-DATA_PATH = Path(__file__).parent.parent / "src" / "data" / "data.json"
-DELAY_BETWEEN_REQUESTS = 15  # seconds — be polite to avoid rate limits
+DATA_PATH = Path(__file__).resolve().parent.parent / "src" / "data" / "data.json"
 
 
-def extract_citation_id(publisher_url: str) -> str | None:
+def extract_author_and_citation_ids(publisher_url: str) -> tuple[str | None, str | None]:
     """
-    Extracts the paper-level citation ID from a Google Scholar URL.
-
-    Example URL:
-      https://scholar.google.com/citations?view_op=view_citation&user=iGdBvvwAAAAJ&citation_for_view=iGdBvvwAAAAJ:u5HHmVD_uO8C
-    Returns:
-      "iGdBvvwAAAAJ:u5HHmVD_uO8C"
+    Extracts author user ID and citation ID from a Google Scholar URL.
     """
-    match = re.search(r"citation_for_view=([^&]+)", publisher_url)
-    return match.group(1) if match else None
+    user_match = re.search(r"user=([^&]+)", publisher_url)
+    cite_match = re.search(r"citation_for_view=([^&]+)", publisher_url)
+    user_id = user_match.group(1) if user_match else None
+    cite_id = cite_match.group(1) if cite_match else None
+    return user_id, cite_id
 
 
-def fetch_citation_count(citation_id: str) -> int | None:
+def fetch_author_publications(author_id: str) -> dict[str, int]:
     """
-    Uses scholarly to look up a paper by its Google Scholar citation_for_view ID
-    and returns its citation count.
+    Fetches the author's publications map: citation_id -> num_citations.
     """
+    pub_map = {}
     try:
-        # scholarly.search_pubs_custom_url lets us query a specific citation page
-        url = f"/citations?view_op=view_citation&citation_for_view={citation_id}"
-        pub = scholarly.search_pubs_custom_url(url)
-        paper = next(pub)
-        bib = paper.get("bib", {})
-        cited_by = paper.get("num_citations", None)
-        title = bib.get("title", "Unknown")
-        print(f"  Title from Scholar: {title}")
-        print(f"  Citation count:     {cited_by}")
-        return cited_by
-    except StopIteration:
-        print("  No results returned from scholarly.")
-        return None
+        print(f"Fetching Google Scholar author profile for ID: {author_id}...")
+        author = scholarly.search_author_id(author_id)
+        author = scholarly.fill(author, sections=["publications"])
+        for p in author.get("publications", []):
+            pub_id = p.get("author_pub_id")
+            num_citations = p.get("num_citations", 0)
+            title = p.get("bib", {}).get("title", "Unknown")
+            if pub_id:
+                pub_map[pub_id] = num_citations
+            print(f"  Scholar entry: {pub_id} | {title} | {num_citations} citations")
     except Exception as e:
-        print(f"  Error fetching from scholarly: {e}")
-        return None
+        print(f"  Error fetching author profile: {e}")
+        traceback.print_exc()
+    return pub_map
 
 
 def main():
+    if not DATA_PATH.exists():
+        print(f"Error: {DATA_PATH} not found.")
+        sys.exit(1)
+
     data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
     publications = data.get("publications", [])
 
@@ -70,35 +67,41 @@ def main():
         print("No publications found in data.json.")
         return
 
+    # Collect author IDs
+    author_ids = set()
+    for pub in publications:
+        url = pub.get("publisherUrl", "")
+        uid, _ = extract_author_and_citation_ids(url)
+        if uid:
+            author_ids.add(uid)
+
+    all_pubs_map = {}
+    for uid in author_ids:
+        pubs = fetch_author_publications(uid)
+        all_pubs_map.update(pubs)
+
     updated = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
 
     for pub in publications:
         title = pub.get("title", "Unknown")
-        publisher_url = pub.get("publisherUrl", "")
+        url = pub.get("publisherUrl", "")
+        _, cite_id = extract_author_and_citation_ids(url)
+
         print(f"\nProcessing: {title}")
+        print(f"  Citation ID: {cite_id}")
 
-        citation_id = extract_citation_id(publisher_url)
-        if not citation_id:
-            print(f"  ⚠️  Could not extract citation_for_view ID from publisherUrl — skipping.")
-            continue
-
-        print(f"  Citation ID: {citation_id}")
-        count = fetch_citation_count(citation_id)
-
-        if count is not None:
+        if cite_id and cite_id in all_pubs_map:
+            count = all_pubs_map[cite_id]
             pub["citations"] = count
-            pub["lastUpdated"] = datetime.now(timezone.utc).isoformat()
+            pub["lastUpdated"] = now_iso
             print(f"  ✅ Updated to {count} citations.")
             updated += 1
         else:
-            print(f"  ⚠️  Keeping existing value ({pub.get('citations', 'none')}).")
+            print(f"  ⚠️  Could not find matching citation count — keeping existing value ({pub.get('citations', 'none')}).")
 
-        if pub is not publications[-1]:
-            print(f"  Waiting {DELAY_BETWEEN_REQUESTS}s before next request...")
-            time.sleep(DELAY_BETWEEN_REQUESTS)
-
-    DATA_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\n✅ Done! Updated {updated}/{len(publications)} publications.")
+    DATA_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"\n✅ Done! Updated {updated}/{len(publications)} publications in data.json.")
 
 
 if __name__ == "__main__":
