@@ -1,58 +1,109 @@
-const axios = require('axios');
-const cheerio = require('cheerio');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
 // Add delay to avoid rate limiting
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function fetchGoogleScholarCitations(url) {
-    try {
-        const response = await axios.get(url, {
+/**
+ * Fetches citation count from the Semantic Scholar API using a DOI.
+ * This is a free, public API that doesn't require scraping or API keys.
+ * API docs: https://api.semanticscholar.org/graph/v1
+ * @param {string} doi - The DOI of the paper (e.g. "10.1109/...")
+ * @returns {Promise<number|null>} - The citation count, or null on failure
+ */
+async function fetchCitationsFromSemanticScholar(doi) {
+    return new Promise((resolve) => {
+        const url = `https://api.semanticscholar.org/graph/v1/paper/DOI:${encodeURIComponent(doi)}?fields=citationCount`;
+        console.log(`  Fetching: ${url}`);
+
+        const req = https.get(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'citation-updater-bot/1.0 (personal portfolio; contact via GitHub ksh168)',
             }
+        }, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        resolve(parsed.citationCount ?? null);
+                    } catch (e) {
+                        console.error(`  Parse error for DOI ${doi}:`, e.message);
+                        resolve(null);
+                    }
+                } else if (res.statusCode === 404) {
+                    console.warn(`  DOI not found on Semantic Scholar: ${doi}`);
+                    resolve(null);
+                } else if (res.statusCode === 429) {
+                    console.warn(`  Rate limited by Semantic Scholar (429). Retrying after delay...`);
+                    resolve('RATE_LIMITED');
+                } else {
+                    console.error(`  Unexpected status ${res.statusCode} for DOI ${doi}`);
+                    resolve(null);
+                }
+            });
         });
-        const $ = cheerio.load(response.data);
-        
-        // Using the XPath converted to CSS selector
-        // #gsc_oci_table > div:nth-child(7) > div.gsc_oci_value > div > a
-        const citationElement = $('#gsc_oci_table div.gsc_oci_value a').filter(function() {
-            return $(this).text().includes('Cited by');
+
+        req.on('error', (err) => {
+            console.error(`  Network error for DOI ${doi}:`, err.message);
+            resolve(null);
         });
-        
-        if (citationElement.length) {
-            const citationText = citationElement.text();
-            const citationCount = citationText.match(/Cited by (\d+)/);
-            return citationCount ? parseInt(citationCount[1]) : null;
-        }
-        
-        return null;
-    } catch (error) {
-        console.error(`Error fetching citations for ${url}:`, error.message);
-        return null;
-    }
+
+        req.setTimeout(15000, () => {
+            console.error(`  Request timed out for DOI ${doi}`);
+            req.destroy();
+            resolve(null);
+        });
+    });
 }
 
 async function updateCitations() {
-    // Read the data file
     const dataPath = path.join(__dirname, '../src/data/data.json');
     const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    
-    // Update citations for each publication
+
+    let updatedCount = 0;
+
     for (const pub of data.publications) {
-        const citations = await fetchGoogleScholarCitations(pub.publisherUrl);
-        if (citations !== null) {
+        // Extract the DOI from the doi field (strip the https://doi.org/ prefix if present)
+        if (!pub.doi) {
+            console.log(`Skipping "${pub.title}" — no DOI found.`);
+            continue;
+        }
+
+        const doi = pub.doi.replace(/^https?:\/\/doi\.org\//i, '');
+        console.log(`\nUpdating citations for: "${pub.title}"`);
+        console.log(`  DOI: ${doi}`);
+
+        let citations = await fetchCitationsFromSemanticScholar(doi);
+
+        // Handle rate limiting with a longer back-off
+        if (citations === 'RATE_LIMITED') {
+            console.log('  Waiting 30s before retry...');
+            await delay(30000);
+            citations = await fetchCitationsFromSemanticScholar(doi);
+        }
+
+        if (citations !== null && citations !== 'RATE_LIMITED') {
             pub.citations = citations;
             pub.lastUpdated = new Date().toISOString();
+            console.log(`  ✅ Updated citations: ${citations}`);
+            updatedCount++;
+        } else {
+            console.log(`  ⚠️  Could not fetch citations — keeping existing value (${pub.citations ?? 'none'}).`);
         }
-        // Add delay between requests
-        await delay(10000); // 10 seconds delay
+
+        // Be respectful: wait 3 seconds between requests
+        await delay(3000);
     }
-    
+
     // Write updated data back to file
     fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-    console.log('Citations updated successfully');
+    console.log(`\nDone! Updated ${updatedCount}/${data.publications.length} publications.`);
 }
 
-updateCitations().catch(console.error); 
+updateCitations().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+});

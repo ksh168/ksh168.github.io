@@ -4,44 +4,56 @@ on:
   schedule:
     - cron: '0 0 * * 0'  # Runs every Sunday at midnight
   workflow_dispatch:      # Allows manual trigger
-  
+
 jobs:
   update-and-deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v2
+
+    # ── Python: fetch Google Scholar citation counts ──────────────────────────
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        node-version: '20'
-    
-    - name: Install dependencies
-      run: |
-        npm install
-    
+        python-version: '3.12'
+
+    - name: Install scholarly
+      run: pip install scholarly
+
     - name: Update citations
-      run: node scripts/update-citations.js
-      
+      run: python scripts/update-citations.py
+
+    # ── Commit updated data.json ──────────────────────────────────────────────
     - name: Configure Git
       run: |
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-    
+
     - name: Commit citation updates
       run: |
         git add src/data/data.json
-        git diff --quiet && git diff --staged --quiet || (git commit -m "Update citation counts [skip ci]" && git push)
+        git diff --quiet && git diff --staged --quiet || \
+          (git commit -m "Update citation counts [skip ci]" && git push)
+
+    # ── Node: build & deploy React app ───────────────────────────────────────
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install Node dependencies
+      run: npm ci
 
     - name: Build
       run: CI=false npm run build
-    
+
     - name: Deploy to GitHub Pages
       run: |
         git remote set-url origin https://git:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
         npm run deploy -- -u "github-actions-bot <support+actions@github.com>"
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
